@@ -6,6 +6,7 @@
 
 #include <sstream>
 #include <thread>
+#include <mutex>
 
 #include "common/macros.h"
 
@@ -68,7 +69,6 @@ class Logger {
   template <typename... Args>
   void out(LogLevel level, const char *file, int line, const char *func,
            const std::string &format, Args... args) {
-    __builtin_assume(level <= LOG_LEVEL_ERROR);
     if (level >= curLogLeve_) {
       std::string msg = buildOut(file, line, func, format, args...);
       std::lock_guard<std::mutex> lockGuard(m_);

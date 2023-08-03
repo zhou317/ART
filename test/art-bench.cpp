@@ -36,8 +36,8 @@ TEST(ArtBench, insertSparse) {
       }
     }
   }
-  //  insertSparseStl<std::map<std::string, int *>>();
-  //  insertSparseStl<std::unordered_map<std::string, int *>>();
+  insertSparseStl<std::map<std::string, int *>>();
+  insertSparseStl<std::unordered_map<std::string, int *>>();
 }
 
 template <class T>

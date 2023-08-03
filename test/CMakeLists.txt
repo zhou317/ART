@@ -1,3 +1,5 @@
+include_directories(${CMAKE_DEPENDENCY}/include)
+
 file(GLOB_RECURSE test_source
         ${PROJECT_SOURCE_DIR}/src/*/*.h
         ${PROJECT_SOURCE_DIR}/src/*/*.cpp
