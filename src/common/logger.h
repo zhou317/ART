@@ -4,9 +4,9 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include <mutex>
 #include <sstream>
 #include <thread>
-#include <mutex>
 
 #include "common/macros.h"
 
@@ -46,6 +46,7 @@ class Logger {
   }
 
   void setLogLevel(LogLevel level) { curLogLeve_ = level; }
+  LogLevel getLogLevel() const { return curLogLeve_; }
 
   template <typename... Args>
   std::string buildOut(const char *file, int line, const char *func,
@@ -59,11 +60,13 @@ class Logger {
     struct tm *tm = localtime(&tv.tv_sec);
     char buf[64] = {0};
     strftime(buf, sizeof(buf), "%F-%X", tm);
-    char logBuf[kLogMaxSize] = {0};
+    std::string ret;
+    ret.resize(kLogMaxSize);
     std::string totalFormat = "[(%s):%s:%s:%d:%s]" + format;
-    int n = std::snprintf(logBuf, kLogMaxSize, totalFormat.c_str(), buf,
+    int n = std::snprintf(ret.data(), kLogMaxSize, totalFormat.c_str(), buf,
                           oss.str().c_str(), file, line, func, args...);
-    return {logBuf, logBuf + n};
+    ret.resize(n);
+    return ret;
   }
 
   template <typename... Args>
@@ -91,7 +94,7 @@ class Logger {
 
  private:
   std::mutex m_;
-  uint32_t curLogLeve_ = LogLevel::LOG_LEVEL_INFO;
+  LogLevel curLogLeve_ = LogLevel::LOG_LEVEL_INFO;
 };
 
 #ifndef NDEBUG
@@ -116,6 +119,19 @@ class Logger {
                           ##__VA_ARGS__)
 
 #define SET_LOG_LEVEL(l) Logger::getLogger().setLogLevel(l);
+
+class TempLogLevelSetter {
+ public:
+  TempLogLevelSetter(LogLevel l) {
+    back_level_ = Logger::getLogger().getLogLevel();
+    Logger::getLogger().setLogLevel(l);
+  }
+
+  ~TempLogLevelSetter() { Logger::getLogger().setLogLevel(back_level_); }
+
+ private:
+  LogLevel back_level_;
+};
 
 #ifndef NDEBUG
 #define ASSERT(cond)                          \

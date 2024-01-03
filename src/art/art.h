@@ -104,7 +104,7 @@ class ArtTree {
         return OldV;
       }
 
-      auto newInner4 = detail::get_new_node<ArtNode4>();
+      auto newInner4 = detail::get_new_art_node<ArtNode4>();
       auto newLeaf = detail::get_new_leaf_node<T>(key, len, value);
       auto [prefixLen, c1, c2] =
           detail::get_prefix_len_and_diff_char(nodePtr, newLeaf, depth);
@@ -118,7 +118,7 @@ class ArtTree {
 
     auto [p, c1, c2] = detail::art_check_inner_prefix(nodePtr, key, len, depth);
     if (p != nodePtr->keyLen) {  // new leaf at this node
-      auto newInner4 = detail::get_new_node<ArtNode4>();
+      auto newInner4 = detail::get_new_art_node<ArtNode4>();
       auto newLeaf = detail::get_new_leaf_node<T>(key, len, value);
       if (p) newInner4->set_key(key + depth, p);
 

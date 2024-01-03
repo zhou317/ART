@@ -52,7 +52,7 @@ static inline void art_delete_from_n4(ArtNodeCommon** node, uint8_t keyByte) {
       }
     }
     *node = child;
-    return_new_node(nodePtr);
+    return_art_node(nodePtr);
   }
 }
 
@@ -88,7 +88,7 @@ static inline void art_delete_from_n16(ArtNodeCommon** node, uint8_t keyByte) {
   nodePtr->children[nodePtr->childNum] = nullptr;
   assert(nodePtr->childNum >= 4);
   if (nodePtr->childNum == 4) {
-    auto newNode4 = get_new_node<ArtNode4>();
+    auto newNode4 = get_new_art_node<ArtNode4>();
     std::memcpy(newNode4->keys, nodePtr->keys, 4 * sizeof(uint8_t));
     std::memcpy(newNode4->children, nodePtr->children,
                 4 * sizeof(ArtNodeCommon*));
@@ -96,7 +96,7 @@ static inline void art_delete_from_n16(ArtNodeCommon** node, uint8_t keyByte) {
     std::swap(newNode4->keyLen, nodePtr->keyLen);
     std::swap(newNode4->key.keyPtr, nodePtr->key.keyPtr);
     *node = reinterpret_cast<ArtNodeCommon*>(newNode4);
-    return_new_node(nodePtr);
+    return_art_node(nodePtr);
   }
 }
 
@@ -109,7 +109,7 @@ static inline void art_delete_from_n48(ArtNodeCommon** node, uint8_t keyByte) {
   nodePtr->index[keyByte] = 0;
   nodePtr->childNum--;
   if (nodePtr->childNum == 16) {
-    auto newNode16 = get_new_node<ArtNode16>();
+    auto newNode16 = get_new_art_node<ArtNode16>();
     int32_t idx = 0;
     for (uint16_t i = 0; i <= 255; i++) {
       if (nodePtr->index[i]) {
@@ -123,7 +123,7 @@ static inline void art_delete_from_n48(ArtNodeCommon** node, uint8_t keyByte) {
     std::swap(newNode16->keyLen, nodePtr->keyLen);
     std::swap(newNode16->key.keyPtr, nodePtr->key.keyPtr);
     *node = reinterpret_cast<ArtNodeCommon*>(newNode16);
-    return_new_node(nodePtr);
+    return_art_node(nodePtr);
   }
 }
 
@@ -134,7 +134,7 @@ static inline void art_delete_from_n256(ArtNodeCommon** node, uint8_t keyByte) {
   nodePtr->children[keyByte] = nullptr;
   nodePtr->childNum--;
   if (nodePtr->childNum == 48) {
-    auto newNode48 = get_new_node<ArtNode48>();
+    auto newNode48 = get_new_art_node<ArtNode48>();
     int32_t idx = 0;
     for (uint16_t i = 0; i <= 255; i++) {
       if (nodePtr->children[i]) {
@@ -148,12 +148,13 @@ static inline void art_delete_from_n256(ArtNodeCommon** node, uint8_t keyByte) {
     std::swap(newNode48->keyLen, nodePtr->keyLen);
     std::swap(newNode48->key.keyPtr, nodePtr->key.keyPtr);
     *node = reinterpret_cast<ArtNodeCommon*>(newNode48);
-    return_new_node(nodePtr);
+    return_art_node(nodePtr);
   }
 }
 
-void art_delete_from_node(ArtNodeCommon** parNode, ArtNodeCommon** node,
-                          const char* key, uint32_t len, uint32_t depth) {
+static void art_delete_from_node(ArtNodeCommon** parNode, ArtNodeCommon** node,
+                                 const char* key, uint32_t len,
+                                 uint32_t depth) {
   assert(depth < len);
   if (unlikely(parNode == nullptr)) {  // root is delete.
     *node = nullptr;
@@ -188,14 +189,14 @@ static void destroy_node(ArtNodeCommon* node) {
       for (uint16_t i = 0; i < delNode->childNum; i++) {
         destroy_node<T>(delNode->children[i]);
       }
-      return_new_node(delNode);
+      return_art_node(delNode);
     } break;
     case ART_NODE_16: {
       auto delNode = reinterpret_cast<ArtNode16*>(node);
       for (uint16_t i = 0; i < delNode->childNum; i++) {
         destroy_node<T>(delNode->children[i]);
       }
-      return_new_node(delNode);
+      return_art_node(delNode);
     } break;
     case ART_NODE_48: {
       auto delNode = reinterpret_cast<ArtNode48*>(node);
@@ -203,18 +204,18 @@ static void destroy_node(ArtNodeCommon* node) {
         if (delNode->index[i])
           destroy_node<T>(delNode->children[delNode->index[i] - 1]);
       }
-      return_new_node(delNode);
+      return_art_node(delNode);
     } break;
     case ART_NODE_256: {
       auto delNode = reinterpret_cast<ArtNode256*>(node);
       for (uint16_t i = 0; i < 255; i++) {
         if (delNode->children[i]) destroy_node<T>(delNode->children[i]);
       }
-      return_new_node(delNode);
+      return_art_node(delNode);
     } break;
     case ART_NODE_LEAF: {
       auto delNode = reinterpret_cast<ArtLeaf<T>*>(node);
-      return_new_node(delNode);
+      return_art_node(delNode);
     } break;
     default: {
       assert(false);

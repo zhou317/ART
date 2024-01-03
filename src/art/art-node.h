@@ -4,6 +4,8 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <string>
+#include <tuple>
 
 #include "common/macros.h"
 
@@ -98,11 +100,11 @@ struct alignas(void *) ArtNodeCommon {
     }
   }
 
-  std::string to_string() {
+  std::string to_string() const {
     if (keyLen > ART_MAX_PREFIX_LEN) {
-      return std::string(key.keyPtr, keyLen);
+      return {key.keyPtr, keyLen};
     } else {
-      return std::string(key.shortKey, keyLen);
+      return {key.shortKey, keyLen};
     }
   }
 
@@ -223,11 +225,11 @@ struct ArtLeaf : public ArtNodeCommon {
 
   bool leaf_matches(const char *k, uint32_t l, uint32_t d) const {
     if (keyLen != l) return false;
-    char *leafKeyCmpStart = nullptr;
+    const char *leafKeyCmpStart = nullptr;
     if (l > ART_MAX_PREFIX_LEN) {
       leafKeyCmpStart = key.keyPtr;
     } else {
-      leafKeyCmpStart = key.shortKey;
+      leafKeyCmpStart = &(key.shortKey[0]);
     }
     leafKeyCmpStart += d;
 
@@ -245,7 +247,7 @@ static_assert(sizeof(ArtNode4) == 16 + 8 + 4 * 8, "Wrong memory layout");
 
 namespace detail {
 
-std::tuple<int32_t, uint8_t, uint8_t> get_prefix_len_and_diff_char(
+static std::tuple<int32_t, uint8_t, uint8_t> get_prefix_len_and_diff_char(
     const ArtNodeCommon *leaf1, const ArtNodeCommon *leaf2, int32_t depth) {
   assert(leaf1->type == ArtNodeType::ART_NODE_LEAF);
   assert(leaf2->type == ArtNodeType::ART_NODE_LEAF);
@@ -270,7 +272,7 @@ std::tuple<int32_t, uint8_t, uint8_t> get_prefix_len_and_diff_char(
   return {idx, c1, c2};
 }
 
-std::tuple<int32_t, uint8_t, uint8_t> art_check_inner_prefix(
+static std::tuple<int32_t, uint8_t, uint8_t> art_check_inner_prefix(
     const ArtNodeCommon *node, const char *key, uint32_t len, uint32_t depth) {
   assert(node->type != ArtNodeType::ART_NODE_LEAF);
   auto prefix = node->get_key_in_depth(0);
@@ -312,6 +314,34 @@ static inline ArtNodeCommon **art_find_child(ArtNodeCommon *node,
       assert(false);
     } break;
   }
+  return ret;
+}
+
+static inline std::string node_type_string(const ArtNodeCommon *node) {
+  std::string ret;
+  switch (node->type) {
+    case ART_NODE_4: {
+      ret = "Node4";
+    } break;
+    case ART_NODE_16: {
+      ret = "Node16";
+    } break;
+    case ART_NODE_48: {
+      ret = "Node48";
+
+    } break;
+    case ART_NODE_256: {
+      ret = "Node256";
+
+    } break;
+    case ART_NODE_LEAF: {
+      ret = "Leaf";
+    } break;
+    default: {
+      assert(false);
+    } break;
+  }
+
   return ret;
 }
 
