@@ -62,7 +62,7 @@ static_assert(ArtNodeTrait<ArtNode256>::NODE_CAPASITY == 256,
 static_assert(ArtNodeTrait<ArtLeaf<int>>::NODE_CAPASITY == 0,
               "should be equal");
 
-template <class T, bool all_new = false>
+template <class T, bool all_new = true>
 static T *get_new_art_node() {
   T *p = nullptr;
   if constexpr (!all_new) {

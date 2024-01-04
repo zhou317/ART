@@ -146,8 +146,7 @@ TEST_F(ArtTreeAddTest, same_value_replace) {
 TEST_F(ArtTreeAddTest, random_test) {
   int64_t seed = time(nullptr);
   LOG_INFO("Seed is %lld", seed);
-  // error when seed = 1704274660, 1704274885
-  std::mt19937_64 rng(seed);
+  std::mt19937_64 rng(1704274660);
   for (int32_t i = 0; i < 10000; i++) {
     int64_t val = rng();
     int64_t cnt = rng() % 4 + 1;
@@ -155,6 +154,7 @@ TEST_F(ArtTreeAddTest, random_test) {
     for (int32_t j = 0; j < cnt; j++) {
       key += std::to_string(rng());
     }
+
     set(key, val);
   }
   LOG_INFO("size %llu.", tree.size());

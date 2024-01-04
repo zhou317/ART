@@ -27,29 +27,8 @@ static inline void art_delete_from_n4(ArtNodeCommon** node, uint8_t keyByte) {
     ArtNodeCommon* child = nodePtr->children[0];
     if (child->type != ArtNodeType::ART_NODE_LEAF) {
       // path compression
-      auto n_len = nodePtr->keyLen;
-      auto c_len = child->keyLen;
-      auto t_len = n_len + c_len;
-      if (t_len <= ART_MAX_PREFIX_LEN) {
-        char childPrefix[ART_MAX_PREFIX_LEN];
-        child->copy_key_to(childPrefix);
-        child->get_key_from_another(nodePtr);
-        char* dest_ptr = const_cast<char*>(child->get_key_in_depth(0)) + c_len;
-        std::memcpy(dest_ptr, childPrefix, c_len);
-        child->keyLen += c_len;
-      } else if (nodePtr->keyLen > 0) {
-        if (child->keyLen == 0) {
-          child->get_key_from_another(nodePtr);
-        } else {
-          char* prefix_buf = (char*)malloc(t_len);
-          nodePtr->copy_key_to(prefix_buf);
-          child->copy_key_to(prefix_buf + n_len);
-          nodePtr->reset_key();
-          child->reset_key();
-          child->key.keyPtr = prefix_buf;
-          child->keyLen = t_len;
-        }
-      }
+      uint8_t c_key_byte = nodePtr->keys[0];
+      child->merge_prefix(nodePtr, c_key_byte);
     }
     *node = child;
     return_art_node(nodePtr);
@@ -65,7 +44,6 @@ static inline void art_delete_from_n16(ArtNodeCommon** node, uint8_t keyByte) {
       _mm_movemask_epi8(_mm_cmpeq_epi8(
           _mm_set1_epi8(keyByte), _mm_loadu_si128((__m128i*)nodePtr->keys))) &
       ((1 << nodePtr->childNum) - 1);
-  assert((bool)bitfield);
   idx = __builtin_ctz(bitfield);
 #else
   for (; idx < nodePtr->childNum; idx++) {
@@ -152,33 +130,36 @@ static inline void art_delete_from_n256(ArtNodeCommon** node, uint8_t keyByte) {
   }
 }
 
-static void art_delete_from_node(ArtNodeCommon** parNode, ArtNodeCommon** node,
-                                 const char* key, uint32_t len,
-                                 uint32_t depth) {
-  assert(depth < len);
-  if (unlikely(parNode == nullptr)) {  // root is delete.
-    *node = nullptr;
-    return;
-  }
-  auto partNodePtr = *parNode;
+static void art_delete_from_node(ArtNodeCommon** node, uint8_t key_byte) {
+  auto partNodePtr = *node;
   assert(partNodePtr != nullptr);
   switch (partNodePtr->type) {
     case ART_NODE_4: {
-      art_delete_from_n4(parNode, key[depth - 1]);
+      art_delete_from_n4(node, key_byte);
     } break;
     case ART_NODE_16: {
-      art_delete_from_n16(parNode, key[depth - 1]);
+      art_delete_from_n16(node, key_byte);
     } break;
     case ART_NODE_48: {
-      art_delete_from_n48(parNode, key[depth - 1]);
+      art_delete_from_n48(node, key_byte);
     } break;
     case ART_NODE_256: {
-      art_delete_from_n256(parNode, key[depth - 1]);
+      art_delete_from_n256(node, key_byte);
     } break;
     default: {
       assert(false);
     } break;
   }
+}
+
+static void art_delete_from_node(ArtNodeCommon** parNode, ArtNodeCommon** node,
+                                 const char* key, uint32_t len,
+                                 uint32_t depth) {
+  if (unlikely(parNode == nullptr)) {  // root is delete.
+    *node = nullptr;
+    return;
+  }
+  art_delete_from_node(parNode, key[depth - 1]);
 }
 
 template <class T>

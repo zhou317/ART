@@ -78,15 +78,41 @@ struct alignas(void *) ArtNodeCommon {
       } else {
         uint32_t after_len = keyLen - l;
         if (after_len <= ART_MAX_PREFIX_LEN) {
-          std::memmove(key.shortKey, key.keyPtr + l, after_len);
+          char tmp[ART_MAX_PREFIX_LEN] = {0};
+          std::memcpy(tmp, key.keyPtr + l, after_len);
+          reset_key();
+          set_key(tmp, after_len);
         } else {
           auto tmp = static_cast<char *>(malloc(keyLen - l));
           std::memcpy(tmp, key.keyPtr + l, after_len);
           reset_key();
-          key.keyPtr = tmp;
-          keyLen = after_len;
+          set_key(tmp, after_len);
         }
       }
+    }
+  }
+
+  void merge_prefix(ArtNodeCommon *pnode, char key_byte) {
+    auto t_len = keyLen + 1 + pnode->keyLen;
+    if (t_len <= ART_MAX_PREFIX_LEN) {
+      char childPrefix[ART_MAX_PREFIX_LEN] = {0};
+      if (pnode->keyLen)
+        std::memcpy(childPrefix, pnode->get_key_in_depth(0), pnode->keyLen);
+      childPrefix[pnode->keyLen] = key_byte;
+      if (keyLen)
+        std::memcpy(childPrefix + pnode->keyLen + 1, get_key_in_depth(0),
+                    keyLen);
+
+      set_key(childPrefix, t_len);
+    } else {
+      char *prefix_buf = (char *)malloc(t_len);
+      if (pnode->keyLen) pnode->copy_key_to(prefix_buf);
+      prefix_buf[pnode->keyLen] = key_byte;
+      if (keyLen) this->copy_key_to(prefix_buf + pnode->keyLen + 1);
+
+      reset_key();
+      key.keyPtr = prefix_buf;
+      keyLen = t_len;
     }
   }
 
@@ -95,8 +121,9 @@ struct alignas(void *) ArtNodeCommon {
     if (l <= ART_MAX_PREFIX_LEN) {
       std::memcpy(key.shortKey, k, l);
     } else {
-      key.keyPtr = static_cast<char *>(malloc(l));
-      std::memcpy(key.keyPtr, k, l);
+      char *tmp = static_cast<char *>(malloc(l));
+      std::memcpy(tmp, k, l);
+      key.keyPtr = tmp;
     }
   }
 
@@ -225,6 +252,7 @@ struct ArtLeaf : public ArtNodeCommon {
 
   bool leaf_matches(const char *k, uint32_t l, uint32_t d) const {
     if (keyLen != l) return false;
+    if (d > l) return true;  // when str2 = str1 + xxx
     const char *leafKeyCmpStart = nullptr;
     if (l > ART_MAX_PREFIX_LEN) {
       leafKeyCmpStart = key.keyPtr;
@@ -267,7 +295,16 @@ static std::tuple<int32_t, uint8_t, uint8_t> get_prefix_len_and_diff_char(
       break;
     }
   }
-  assert(idx < maxCmp);
+
+  // It a problem that how to support predix contain: str2 = str1 + '\0' +
+  // remain
+  if (unlikely(idx == maxCmp)) {
+    if (leaf1->keyLen > leaf2->keyLen) {
+      c1 = key1[idx];
+    } else {
+      c2 = key2[idx];
+    }
+  }
 
   return {idx, c1, c2};
 }

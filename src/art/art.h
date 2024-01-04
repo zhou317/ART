@@ -65,7 +65,7 @@ class ArtTree {
         T v = leaf->value;
         detail::art_delete_from_node(parNode, node, key, len, depth);
         size_--;
-        return_new_node(leaf);
+        detail::return_art_node(leaf);
         return v;
       } else {
         return T{};
@@ -130,7 +130,7 @@ class ArtTree {
     }
 
     depth += p;
-    uint8_t child_key = key[depth];
+    uint8_t child_key = depth < len ? key[depth] : 0;
     auto next = detail::art_find_child(nodePtr, child_key);
     if (next) {
       return insertInt(next, key, len, value, depth + 1);

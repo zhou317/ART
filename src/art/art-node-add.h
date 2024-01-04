@@ -1,6 +1,8 @@
 #pragma once
 
 #include "art/art-node-pool.h"
+#include "art/art-printer.h"
+#include "common/logger.h"
 
 namespace art {
 namespace detail {
@@ -62,11 +64,9 @@ static inline void art_add_child_to_n16(ArtNodeCommon **node, uint8_t keyByte,
     }
 
     // move keys and child pointers
-    size_t diff = nodePtr->childNum - idx;
-    if (diff) {
-      std::memmove(&(nodePtr->keys[idx + 1]), &(nodePtr->keys[idx]), diff);
-      std::memmove(&(nodePtr->children[idx + 1]), &(nodePtr->children[idx]),
-                   diff * sizeof(ArtNodeCommon *));
+    for (int32_t j = nodePtr->childNum; j > idx; j--) {
+      nodePtr->keys[j] = nodePtr->keys[j - 1];
+      nodePtr->children[j] = nodePtr->children[j - 1];
     }
 
     nodePtr->keys[idx] = keyByte;

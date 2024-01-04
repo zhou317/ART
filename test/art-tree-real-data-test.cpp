@@ -1,14 +1,21 @@
 #include <random>
 #include <unordered_map>
 
-#include "art/art-printer.h"
 #include "art/art.h"
 #include "common/logger.h"
 #include "gtest/gtest.h"
 
+const char *words_data[] = {
+#include "data/words.txt"
+};
+
+const char *uuid_data[] = {
+#include "data/uuid.txt"
+};
+
 namespace art {
 
-class ArtTreeBasicTest : public ::testing::Test {
+class ArtTreeRealDataTest : public ::testing::Test {
  public:
   void TearDown() override {
     for (auto &iter : verify_map) {
@@ -31,12 +38,25 @@ class ArtTreeBasicTest : public ::testing::Test {
   ArtTree<int64_t> tree;
 };
 
-TEST_F(ArtTreeBasicTest, basic) {
-  for (int32_t i = 0; i < 10000; i++) {
-    set(std::to_string(i), i);
+TEST_F(ArtTreeRealDataTest, words_data) {
+  int len = sizeof(words_data) / sizeof(const char *);
+  for (int32_t i = 0; i < len; i++) {
+    set(words_data[i], i);
   }
-  for (int32_t i = 0; i < 10000; i += 2) {
-    del(std::to_string(i));
+
+  for (int32_t i = 0; i < len; i += 2) {
+    del(words_data[i]);
+  }
+}
+
+TEST_F(ArtTreeRealDataTest, uuid_data) {
+  int len = sizeof(uuid_data) / sizeof(const char *);
+  for (int32_t i = 0; i < len; i++) {
+    set(uuid_data[i], i);
+  }
+
+  for (int32_t i = 0; i < len; i += 2) {
+    del(uuid_data[i]);
   }
 }
 
