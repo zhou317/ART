@@ -124,7 +124,8 @@ void test_fun() {
   child_map.erase(key_byte);
   verify_node<BeforeT>(common_n, child_map);
 
-  return_art_node(common_n);
+  auto ret_node = reinterpret_cast<BeforeT*>(common_n);
+  return_art_node(ret_node);
   for (auto& iter : child_map) {
     return_art_node(iter.second);
   }

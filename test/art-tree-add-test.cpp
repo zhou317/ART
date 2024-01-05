@@ -143,6 +143,52 @@ TEST_F(ArtTreeAddTest, same_value_replace) {
   EXPECT_EQ(1, tree.size());
 }
 
+TEST_F(ArtTreeAddTest, key_short_than_prefix0) {
+  set("abcdef1", 1);
+  set("abcdef2", 2);
+  set("abc", 3);
+  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+}
+
+TEST_F(ArtTreeAddTest, key_short_than_prefix1) {
+  set("abcdefghijklmnopqrstuvwxyz1", 1);
+  set("abcdefghijklmnopqrstuvwxyz2", 2);
+  set("abc", 3);
+  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+}
+
+TEST_F(ArtTreeAddTest, populate_node4_with_leaf0) {
+  set("abcd", 1);
+  set("accd", 2);
+  set("acddfgh", 3);
+  set("acddf", 4);
+  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+}
+
+TEST_F(ArtTreeAddTest, populate_node4_with_leaf1) {
+  set("abcd", 1);
+  set("accd", 2);
+  set("acddfgh", 3);
+  set("acddfghij", 4);
+  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+}
+
+TEST_F(ArtTreeAddTest, get_minimum_node) {
+  set("ba", 0);
+
+  std::string base = "a";
+  for (int32_t i = 1; i < 256; i++) {
+    base.push_back(i);
+    set(base, i + 1);
+    base.pop_back();
+
+    auto l = detail::art_get_minimum_node(tree.getRoot());
+    auto key = l->to_string();
+
+    EXPECT_EQ("a\1", key);
+  }
+}
+
 TEST_F(ArtTreeAddTest, random_test) {
   int64_t seed = time(nullptr);
   LOG_INFO("Seed is %lld", seed);

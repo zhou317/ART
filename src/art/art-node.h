@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
-#include <tuple>
 
+#include "common/logger.h"
 #include "common/macros.h"
 
 #if defined(__i386__) || defined(__amd64__)
@@ -27,6 +27,12 @@ enum ArtNodeType : uint8_t {
 union ArtNodeKey {
   char shortKey[ART_MAX_PREFIX_LEN];
   char *keyPtr;
+};
+
+template <class T>
+struct ArtNodeTrait {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_INVALID;
+  static constexpr uint32_t NODE_CAPASITY = 0;
 };
 
 struct alignas(void *) ArtNodeCommon {
@@ -55,98 +61,70 @@ struct alignas(void *) ArtNodeCommon {
   }
 
   void copy_key_to(char *buf) {
-    const char *ptr = get_key_in_depth(0);
+    const char *ptr = get_key();
     std::memcpy(buf, ptr, keyLen);
   }
 
-  void reset_key() {
-    if (keyLen > ART_MAX_PREFIX_LEN) {
-      free(key.keyPtr);
+  void set_key(const char *k, uint32_t l) {
+    reset_key();
+    if (type == ArtNodeType::ART_NODE_LEAF) {
+      if (l <= ART_MAX_PREFIX_LEN) {
+        std::memcpy(key.shortKey, k, std::min((uint32_t)ART_MAX_PREFIX_LEN, l));
+      } else {
+        char *tmp = (char *)malloc(l);
+        std::memcpy(tmp, k, l);
+        key.keyPtr = tmp;
+      }
+    } else {
+      std::memcpy(key.shortKey, k, std::min((uint32_t)ART_MAX_PREFIX_LEN, l));
     }
+    keyLen = l;
+  }
+
+  void reset_key() {
+    if (type == ArtNodeType::ART_NODE_LEAF) {
+      if (keyLen > ART_MAX_PREFIX_LEN) {
+        free(key.keyPtr);
+      }
+    }
+
     key.keyPtr = nullptr;
     keyLen = 0;
   }
 
-  void remove_prefix(int32_t l) {
-    assert(l <= keyLen);
-    if (l == keyLen) {
-      reset_key();
-    } else {
-      if (keyLen <= ART_MAX_PREFIX_LEN) {
-        keyLen -= l;
-        std::memmove(key.shortKey, key.shortKey + l, keyLen);
-      } else {
-        uint32_t after_len = keyLen - l;
-        if (after_len <= ART_MAX_PREFIX_LEN) {
-          char tmp[ART_MAX_PREFIX_LEN] = {0};
-          std::memcpy(tmp, key.keyPtr + l, after_len);
-          reset_key();
-          set_key(tmp, after_len);
-        } else {
-          auto tmp = static_cast<char *>(malloc(keyLen - l));
-          std::memcpy(tmp, key.keyPtr + l, after_len);
-          reset_key();
-          set_key(tmp, after_len);
-        }
-      }
-    }
-  }
-
-  void merge_prefix(ArtNodeCommon *pnode, char key_byte) {
-    auto t_len = keyLen + 1 + pnode->keyLen;
-    if (t_len <= ART_MAX_PREFIX_LEN) {
-      char childPrefix[ART_MAX_PREFIX_LEN] = {0};
-      if (pnode->keyLen)
-        std::memcpy(childPrefix, pnode->get_key_in_depth(0), pnode->keyLen);
-      childPrefix[pnode->keyLen] = key_byte;
-      if (keyLen)
-        std::memcpy(childPrefix + pnode->keyLen + 1, get_key_in_depth(0),
-                    keyLen);
-
-      set_key(childPrefix, t_len);
-    } else {
-      char *prefix_buf = (char *)malloc(t_len);
-      if (pnode->keyLen) pnode->copy_key_to(prefix_buf);
-      prefix_buf[pnode->keyLen] = key_byte;
-      if (keyLen) this->copy_key_to(prefix_buf + pnode->keyLen + 1);
-
-      reset_key();
-      key.keyPtr = prefix_buf;
-      keyLen = t_len;
-    }
-  }
-
-  void set_key(const char *k, uint32_t l) {
-    keyLen = l;
-    if (l <= ART_MAX_PREFIX_LEN) {
-      std::memcpy(key.shortKey, k, l);
-    } else {
-      char *tmp = static_cast<char *>(malloc(l));
-      std::memcpy(tmp, k, l);
-      key.keyPtr = tmp;
-    }
+  void reset_prefix(ArtNodeKey new_prefix, int32_t remove_len) {
+    assert(remove_len <= keyLen);
+    keyLen -= remove_len;
+    key = new_prefix;
   }
 
   std::string to_string() const {
-    if (keyLen > ART_MAX_PREFIX_LEN) {
-      return {key.keyPtr, keyLen};
+    const char *ptr = get_key();
+    uint32_t len = 0;
+    if (type == ArtNodeType::ART_NODE_LEAF) {
+      len = keyLen;
     } else {
-      return {key.shortKey, keyLen};
+      len = std::min(keyLen, (uint32_t)ART_MAX_PREFIX_LEN);
     }
+
+    return {ptr, len};
   }
 
-  inline const char *get_key_in_depth(uint32_t d) const {
+  inline const char *get_key() const {
     const char *ptr = nullptr;
-    if (keyLen > ART_MAX_PREFIX_LEN) {
+    if (type == ArtNodeType::ART_NODE_LEAF && keyLen > ART_MAX_PREFIX_LEN) {
       ptr = key.keyPtr;
     } else {
       ptr = key.shortKey;
     }
-    return ptr + d;
+
+    return ptr;
   }
 
-  inline uint8_t get_char_in_depth(uint32_t d) const {
-    return get_key_in_depth(d)[0];
+  void set_prefix_key(const char *k, uint32_t l) {
+    keyLen = l;
+    if (l)
+      std::memcpy(key.shortKey, k, std::min(l, (uint32_t)ART_MAX_PREFIX_LEN));
   }
 };
 
@@ -252,16 +230,12 @@ struct ArtLeaf : public ArtNodeCommon {
 
   bool leaf_matches(const char *k, uint32_t l, uint32_t d) const {
     if (keyLen != l) return false;
-    if (d > l) return true;  // when str2 = str1 + xxx
-    const char *leafKeyCmpStart = nullptr;
-    if (l > ART_MAX_PREFIX_LEN) {
-      leafKeyCmpStart = key.keyPtr;
-    } else {
-      leafKeyCmpStart = &(key.shortKey[0]);
-    }
-    leafKeyCmpStart += d;
+    if (d >= l) return true;  // when str2 = str1 + xxx
+    auto leaf_key = get_key();
+    if (leaf_key[d] != k[d]) return false;
 
-    return std::memcmp(leafKeyCmpStart, k + d, l - d) == 0;
+    bool ret = std::memcmp(leaf_key, k, l) == 0;
+    return ret;
   }
 
   T value;
@@ -273,10 +247,67 @@ static_assert(sizeof(ArtNode16) == 16 + 16 + 16 * 8, "Wrong memory layout");
 // node4 keys is 8-align
 static_assert(sizeof(ArtNode4) == 16 + 8 + 4 * 8, "Wrong memory layout");
 
+template <>
+struct ArtNodeTrait<ArtNode4> {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_4;
+  static constexpr uint32_t NODE_CAPASITY = 4;
+};
+
+template <>
+struct ArtNodeTrait<ArtNode16> {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_16;
+  static constexpr uint32_t NODE_CAPASITY = 16;
+};
+
+template <>
+struct ArtNodeTrait<ArtNode48> {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_48;
+  static constexpr uint32_t NODE_CAPASITY = 48;
+};
+
+template <>
+struct ArtNodeTrait<ArtNode256> {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_256;
+  static constexpr uint32_t NODE_CAPASITY = 256;
+};
+
+template <class T>
+struct ArtNodeTrait<ArtLeaf<T>> {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_LEAF;
+  static constexpr uint32_t NODE_CAPASITY = 0;
+};
+
+static_assert(ArtNodeTrait<ArtNode4>::NODE_TYPE == ArtNodeType::ART_NODE_4,
+              "should be equal");
+static_assert(ArtNodeTrait<ArtNode16>::NODE_TYPE == ArtNodeType::ART_NODE_16,
+              "should be equal");
+static_assert(ArtNodeTrait<ArtNode48>::NODE_TYPE == ArtNodeType::ART_NODE_48,
+              "should be equal");
+static_assert(ArtNodeTrait<ArtNode256>::NODE_TYPE == ArtNodeType::ART_NODE_256,
+              "should be equal");
+static_assert(ArtNodeTrait<ArtLeaf<int>>::NODE_TYPE ==
+                  ArtNodeType::ART_NODE_LEAF,
+              "should be equal");
+
+static_assert(ArtNodeTrait<ArtNode4>::NODE_CAPASITY == 4, "should be equal");
+static_assert(ArtNodeTrait<ArtNode16>::NODE_CAPASITY == 16, "should be equal");
+static_assert(ArtNodeTrait<ArtNode48>::NODE_CAPASITY == 48, "should be equal");
+static_assert(ArtNodeTrait<ArtNode256>::NODE_CAPASITY == 256,
+              "should be equal");
+static_assert(ArtNodeTrait<ArtLeaf<int>>::NODE_CAPASITY == 0,
+              "should be equal");
+
 namespace detail {
 
-static std::tuple<int32_t, uint8_t, uint8_t> get_prefix_len_and_diff_char(
-    const ArtNodeCommon *leaf1, const ArtNodeCommon *leaf2, int32_t depth) {
+struct PrefixDiffResult {
+  int32_t prefix_len;
+  uint8_t c1;
+  uint8_t c2;
+};
+
+static PrefixDiffResult get_prefix_len_and_diff_char(const ArtNodeCommon *leaf1,
+                                                     const ArtNodeCommon *leaf2,
+                                                     int32_t depth) {
   assert(leaf1->type == ArtNodeType::ART_NODE_LEAF);
   assert(leaf2->type == ArtNodeType::ART_NODE_LEAF);
 
@@ -285,8 +316,8 @@ static std::tuple<int32_t, uint8_t, uint8_t> get_prefix_len_and_diff_char(
   uint8_t c1 = 0;
   uint8_t c2 = 0;
 
-  auto key1 = leaf1->get_key_in_depth(depth);
-  auto key2 = leaf2->get_key_in_depth(depth);
+  auto key1 = leaf1->get_key() + depth;
+  auto key2 = leaf2->get_key() + depth;
 
   for (; idx < maxCmp; idx++) {
     if (key1[idx] != key2[idx]) {
@@ -296,8 +327,7 @@ static std::tuple<int32_t, uint8_t, uint8_t> get_prefix_len_and_diff_char(
     }
   }
 
-  // It a problem that how to support predix contain: str2 = str1 + '\0' +
-  // remain
+  // It a problem that how to support predix contain: str2 = str1 + xxx
   if (unlikely(idx == maxCmp)) {
     if (leaf1->keyLen > leaf2->keyLen) {
       c1 = key1[idx];
@@ -309,25 +339,137 @@ static std::tuple<int32_t, uint8_t, uint8_t> get_prefix_len_and_diff_char(
   return {idx, c1, c2};
 }
 
-static std::tuple<int32_t, uint8_t, uint8_t> art_check_inner_prefix(
-    const ArtNodeCommon *node, const char *key, uint32_t len, uint32_t depth) {
-  assert(node->type != ArtNodeType::ART_NODE_LEAF);
-  auto prefix = node->get_key_in_depth(0);
-  auto minLen = std::min(node->keyLen, len - depth);
+static const ArtNodeCommon *art_get_minimum_node(const ArtNodeCommon *node) {
+  auto ret = node;
 
-  int32_t ret = 0;
-  uint8_t c1 = 0;
-  uint8_t c2 = 0;
-
-  for (; ret < minLen; ret++) {
-    if (prefix[ret] != key[depth + ret]) {
-      c1 = prefix[ret];
-      c2 = key[depth + ret];
+  while (ret) {
+    if (ret->type == ArtNodeType::ART_NODE_LEAF) {
       break;
+    }
+
+    switch (ret->type) {
+      case ArtNodeType::ART_NODE_4: {
+        ret = reinterpret_cast<const ArtNode4 *>(ret)->children[0];
+      } break;
+      case ArtNodeType::ART_NODE_16: {
+        ret = reinterpret_cast<const ArtNode16 *>(ret)->children[0];
+      } break;
+      case ArtNodeType::ART_NODE_48: {
+        int32_t idx = 0;
+        auto tmp = reinterpret_cast<const ArtNode48 *>(ret);
+        while (!tmp->index[idx]) idx++;
+        idx = tmp->index[idx] - 1;
+        ret = tmp->children[idx];
+      } break;
+      case ArtNodeType::ART_NODE_256: {
+        int32_t idx = 0;
+        auto tmp = reinterpret_cast<const ArtNode256 *>(ret);
+        while (!tmp->children[idx]) idx++;
+        ret = tmp->children[idx];
+      } break;
+      default: {
+        LOG_ERROR("unknown node type");
+      }
     }
   }
 
-  return {ret, c1, c2};
+  return ret;
+}
+
+static inline ArtNodeKey funGetNewPrefix(const char *ptr, uint32_t depth,
+                                         uint32_t prefix_len,
+                                         uint32_t prefix_diff) {
+  ArtNodeKey ret = {.keyPtr = nullptr};
+  uint32_t remain_len = prefix_len - prefix_diff - 1;
+  assert(prefix_len >= prefix_diff + 1);
+  if (remain_len > 0) {
+    std::memcpy(ret.shortKey, ptr + depth + prefix_diff + 1,
+                std::min((uint32_t)ART_MAX_PREFIX_LEN, remain_len));
+  }
+
+  return ret;
+};
+
+struct InnerPrefixDiffResult {
+  int32_t prefix_len;
+  uint8_t c1;
+  uint8_t c2;
+  ArtNodeKey new_inner;
+};
+
+static InnerPrefixDiffResult art_check_inner_prefix(const ArtNodeCommon *node,
+                                                    const char *key,
+                                                    uint32_t len,
+                                                    uint32_t depth) {
+  assert(node->type != ArtNodeType::ART_NODE_LEAF);
+  int32_t ret = 0;
+  uint8_t c1 = 0;
+  uint8_t c2 = 0;
+  ArtNodeKey new_prefix = {.keyPtr = nullptr};
+
+  auto max_cmp = std::min(node->keyLen, len - depth);
+  if (node->keyLen <= ART_MAX_PREFIX_LEN) {
+    auto prefix = node->get_key();
+    for (; ret < max_cmp; ret++) {
+      if (prefix[ret] != key[depth + ret]) {
+        c1 = prefix[ret];
+        c2 = key[depth + ret];
+        new_prefix = funGetNewPrefix(prefix, (uint32_t)0, node->keyLen, ret);
+        return {ret, c1, c2, new_prefix};
+      }
+    }
+
+    if (len - depth < node->keyLen) {
+      c1 = prefix[ret];
+      new_prefix = funGetNewPrefix(prefix, (uint32_t)0, node->keyLen, ret);
+    }
+
+    return {ret, c1, c2, new_prefix};
+  } else {
+    // We need get a leaf for entire prefix.
+    // All child have same prefix, wo get leftmost.
+    auto l = art_get_minimum_node(node);
+
+    for (; ret < max_cmp; ret++) {
+      if (l->get_key()[depth + ret] != key[depth + ret]) {
+        c1 = l->get_key()[depth + ret];
+        c2 = key[depth + ret];
+        new_prefix = funGetNewPrefix(l->get_key(), depth, node->keyLen, ret);
+        return {ret, c1, c2, new_prefix};
+      }
+    }
+
+    if (len - depth < node->keyLen) {
+      c1 = l->get_key()[depth + ret];
+      new_prefix = funGetNewPrefix(l->get_key(), depth, node->keyLen, ret);
+    }
+
+    return {ret, c1, c2, new_prefix};
+  }
+}
+
+static bool art_inner_prefix_match(const ArtNodeCommon *node, const char *key,
+                                   uint32_t len, uint32_t depth) {
+  auto store_inner_prefix_len =
+      std::min(node->keyLen, (uint32_t)ART_MAX_PREFIX_LEN);
+  uint32_t remain_key_len = len - depth;
+
+  bool ret = false;
+  // if remain key len less than inner prefix, mismatch
+  if (remain_key_len >= store_inner_prefix_len) {
+    ret = true;
+
+    int32_t idx = 0;
+    auto prefix = node->get_key();
+    for (; idx < store_inner_prefix_len; idx++) {
+      if (prefix[idx] != key[depth + idx]) {
+        ret = false;
+        break;
+      }
+    }
+  }
+
+  return ret;
 }
 
 static inline ArtNodeCommon **art_find_child(ArtNodeCommon *node,
@@ -347,8 +489,7 @@ static inline ArtNodeCommon **art_find_child(ArtNodeCommon *node,
       ret = reinterpret_cast<ArtNode256 *>(node)->find_child(keyByte);
     } break;
     default: {
-      ret = nullptr;
-      assert(false);
+      LOG_ERROR("unknown node type");
     } break;
   }
   return ret;
@@ -365,17 +506,15 @@ static inline std::string node_type_string(const ArtNodeCommon *node) {
     } break;
     case ART_NODE_48: {
       ret = "Node48";
-
     } break;
     case ART_NODE_256: {
       ret = "Node256";
-
     } break;
     case ART_NODE_LEAF: {
       ret = "Leaf";
     } break;
     default: {
-      assert(false);
+      LOG_ERROR("unknown node type");
     } break;
   }
 
