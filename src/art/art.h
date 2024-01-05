@@ -1,5 +1,6 @@
 #pragma once
 
+#include <csetjmp>
 #include <cstdint>
 #include <string>
 
@@ -8,15 +9,18 @@
 
 namespace art {
 
+#define ART_SET_RESTART_POINT setjmp(ArtTree::restart_jmp_buf_)
+#define ART_RESTART longjmp(ArtTree::restart_jmp_buf_, 1)
+
 template <class T>
 class ArtTree {
  public:
   ArtTree() = default;
 
   ~ArtTree() {
-    if (likely(root_)) {
-      detail::destroy_node<T>(root_);
-      root_ = nullptr;
+    if (likely(meta_to_root_.children[0])) {
+      detail::destroy_node<T>(meta_to_root_.children[0]);
+      meta_to_root_.children[0] = nullptr;
     }
   }
 
@@ -25,25 +29,17 @@ class ArtTree {
   }
 
   T get(const char* key, uint32_t len) const {
-    auto leafNode = findInt(root_, key, len, 0);
-    if (leafNode) {
-      return reinterpret_cast<const ArtLeaf<T>*>(leafNode)->value;
-    } else {
-      return T{};
-    }
+    ART_SET_RESTART_POINT;
+
+    uint64_t save_v = art_read_lock_or_restart(&meta_to_root_);
+    auto root_ptr = meta_to_root_.children[0];
+    art_read_unlock_or_restart(&meta_to_root_, save_v);
+    auto ret = findInt(root_ptr, key, len, 0);
+    return ret;
   }
 
   T del(const char* key, uint32_t len) {
     return deleteInt(nullptr, &root_, key, len, 0);
-  }
-
-  int32_t count(const char* key, uint32_t len) const {
-    auto leafNode = findInt(root_, key, len, 0);
-    if (leafNode) {
-      return 1;
-    } else {
-      return 0;
-    }
   }
 
   // for debug
@@ -142,13 +138,16 @@ class ArtTree {
     }
   }
 
-  const ArtNodeCommon* findInt(const ArtNodeCommon* node, const char* key,
-                               uint32_t len, uint32_t depth) const {
+  T findInt(const ArtNodeCommon* node, const char* key, uint32_t len,
+            uint32_t depth) const {
     if (unlikely(node == nullptr)) {
-      return nullptr;
+      return T{};
     }
 
+    auto save_v = art_read_lock_or_restart(node);
+
     if (node->type == ArtNodeType::ART_NODE_LEAF) {
+      // no one will modify leaf
       auto leaf = reinterpret_cast<const ArtLeaf<T>*>(node);
       if (leaf->leaf_matches(key, len, depth)) {
         return node;
@@ -159,18 +158,69 @@ class ArtTree {
 
     auto [p, c1, c2] = detail::art_check_inner_prefix(node, key, len, depth);
     if (p != node->keyLen) {
+      art_read_unlock_or_restart(node, save_v);
       return nullptr;
     }
 
     depth += p;
     auto next =
         detail::art_find_child(const_cast<ArtNodeCommon*>(node), key[depth]);
+    art_read_unlock_or_restart(node, save_v);
+
     if (!next) return nullptr;
     return findInt(*next, key, len, depth + 1);
   }
 
  private:
-  ArtNodeCommon* root_ = nullptr;
+#define ART_SET_LOCK_BIT(v) ((v) + 2)
+#define ART_IS_OBSOLETE(v) ((v)&1)
+#define ART_IS_LOCKED(v) ((v)&2)
+
+  static uint64_t _art_spin_on_locked_node(const ArtNodeCommon* node) {
+    uint64_t version = node->version.load();
+    while (ART_IS_LOCKED(version)) {
+      __builtin_ia32_pause();
+      version = node->version.load();
+    }
+    return version;
+  }
+
+  static uint64_t art_read_lock_or_restart(const ArtNodeCommon* node) {
+    uint64_t version = _art_spin_on_locked_node(node);
+    if (ART_IS_OBSOLETE(version)) ART_RESTART;  // node may be logically delete
+    return version;
+  }
+
+  static void art_read_unlock_or_restart(const ArtNodeCommon* node,
+                                         uint64_t oldV) {
+    if (oldV != node->version.load()) ART_RESTART;
+  }
+
+  static void art_upgrade_to_write_or_restart(ArtNodeCommon* node,
+                                              uint64_t oldV) {
+    if (!node->version.compare_exchange_strong(oldV, ART_SET_LOCK_BIT(oldV)))
+      ART_RESTART;
+  }
+
+  static void art_write_unlock(ArtNodeCommon* node) {
+    node->version.fetch_add(2);
+  }
+
+  static void art_write_unlock_obsolete(ArtNodeCommon* node) {
+    node->version.fetch_add(3);
+  }
+
+  static void art_upgrade_to_write_or_restart_and_release(
+      ArtNodeCommon* node, uint64_t oldV, ArtNodeCommon* lockNode) {
+    if (!node->version.compare_exchange_strong(oldV, ART_SET_LOCK_BIT(oldV))) {
+      art_write_unlock(lockNode);
+      ART_RESTART;
+    }
+  }
+
+ private:
+  static thread_local jmp_buf restart_jmp_buf_;
+  ArtNode4 meta_to_root_;
   uint64_t size_ = 0;
 };
 

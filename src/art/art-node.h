@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -29,7 +30,8 @@ union ArtNodeKey {
   char *keyPtr;
 };
 
-struct alignas(void *) ArtNodeCommon {
+struct alignas(64) ArtNodeCommon {
+  std::atomic<uint64_t> version = {0};
   ArtNodeKey key = {.keyPtr = nullptr};
   uint32_t keyLen = 0;
   uint8_t flag = 0;
@@ -41,6 +43,7 @@ struct alignas(void *) ArtNodeCommon {
   bool is_from_new() const { return flag & 1; }
 
   void reset() {
+    version = 0;
     reset_key();
     flag = 0;
     type = ART_NODE_INVALID;
@@ -50,8 +53,8 @@ struct alignas(void *) ArtNodeCommon {
   void get_key_from_another(ArtNodeCommon *node) {
     key.keyPtr = node->key.keyPtr;
     keyLen = node->keyLen;
-    node->key.keyPtr = nullptr;
     node->keyLen = 0;
+    node->key.keyPtr = nullptr;
   }
 
   void copy_key_to(char *buf) {
