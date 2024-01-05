@@ -44,7 +44,8 @@ void get_and_return() {
 
   node4->set_key("hello long key", 14);
 
-  EXPECT_EQ(node4->to_string(), "hello long key");
+  EXPECT_EQ(node4->to_string(), "hello lo");
+  EXPECT_EQ(node4->keyLen, 14);
   LOG_DEBUG("%s", node4->to_string().c_str());
 
   auto nodel = get_new_leaf_node<int, allNew>("hello", 5, 2023);

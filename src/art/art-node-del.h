@@ -27,8 +27,22 @@ static inline void art_delete_from_n4(ArtNodeCommon** node, uint8_t keyByte) {
     ArtNodeCommon* child = nodePtr->children[0];
     if (child->type != ArtNodeType::ART_NODE_LEAF) {
       // path compression
-      uint8_t c_key_byte = nodePtr->keys[0];
-      child->merge_prefix(nodePtr, c_key_byte);
+
+      ArtNodeKey key = nodePtr->key;
+      uint32_t new_key_len = nodePtr->keyLen;
+      if (nodePtr->keyLen < ART_MAX_PREFIX_LEN) {
+        key.shortKey[new_key_len++] = nodePtr->keys[0];
+      }
+
+      if (new_key_len < ART_MAX_PREFIX_LEN) {
+        uint32_t sub_prefix =
+            std::min(child->keyLen, (uint32_t)ART_MAX_PREFIX_LEN - new_key_len);
+        memcpy(key.shortKey + new_key_len, child->key.shortKey, sub_prefix);
+        new_key_len += sub_prefix;
+      }
+
+      child->key = key;
+      child->keyLen += nodePtr->keyLen + 1;
     }
     *node = child;
     return_art_node(nodePtr);
@@ -147,7 +161,7 @@ static void art_delete_from_node(ArtNodeCommon** node, uint8_t key_byte) {
       art_delete_from_n256(node, key_byte);
     } break;
     default: {
-      assert(false);
+      LOG_ERROR("unknown node type");
     } break;
   }
 }
@@ -199,7 +213,7 @@ static void destroy_node(ArtNodeCommon* node) {
       return_art_node(delNode);
     } break;
     default: {
-      assert(false);
+      LOG_ERROR("unknown node type");
     } break;
   }
 }

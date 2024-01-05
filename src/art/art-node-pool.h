@@ -6,63 +6,7 @@
 namespace art {
 namespace detail {
 
-template <class T>
-struct ArtNodeTrait {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_INVALID;
-  static constexpr uint32_t NODE_CAPASITY = 0;
-};
-
-template <>
-struct ArtNodeTrait<ArtNode4> {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_4;
-  static constexpr uint32_t NODE_CAPASITY = 4;
-};
-
-template <>
-struct ArtNodeTrait<ArtNode16> {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_16;
-  static constexpr uint32_t NODE_CAPASITY = 16;
-};
-
-template <>
-struct ArtNodeTrait<ArtNode48> {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_48;
-  static constexpr uint32_t NODE_CAPASITY = 48;
-};
-
-template <>
-struct ArtNodeTrait<ArtNode256> {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_256;
-  static constexpr uint32_t NODE_CAPASITY = 256;
-};
-
-template <class T>
-struct ArtNodeTrait<ArtLeaf<T>> {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_LEAF;
-  static constexpr uint32_t NODE_CAPASITY = 0;
-};
-
-static_assert(ArtNodeTrait<ArtNode4>::NODE_TYPE == ArtNodeType::ART_NODE_4,
-              "should be equal");
-static_assert(ArtNodeTrait<ArtNode16>::NODE_TYPE == ArtNodeType::ART_NODE_16,
-              "should be equal");
-static_assert(ArtNodeTrait<ArtNode48>::NODE_TYPE == ArtNodeType::ART_NODE_48,
-              "should be equal");
-static_assert(ArtNodeTrait<ArtNode256>::NODE_TYPE == ArtNodeType::ART_NODE_256,
-              "should be equal");
-static_assert(ArtNodeTrait<ArtLeaf<int>>::NODE_TYPE ==
-                  ArtNodeType::ART_NODE_LEAF,
-              "should be equal");
-
-static_assert(ArtNodeTrait<ArtNode4>::NODE_CAPASITY == 4, "should be equal");
-static_assert(ArtNodeTrait<ArtNode16>::NODE_CAPASITY == 16, "should be equal");
-static_assert(ArtNodeTrait<ArtNode48>::NODE_CAPASITY == 48, "should be equal");
-static_assert(ArtNodeTrait<ArtNode256>::NODE_CAPASITY == 256,
-              "should be equal");
-static_assert(ArtNodeTrait<ArtLeaf<int>>::NODE_CAPASITY == 0,
-              "should be equal");
-
-template <class T, bool all_new = true>
+template <class T, bool all_new = false>
 static T *get_new_art_node() {
   T *p = nullptr;
   if constexpr (!all_new) {
@@ -88,9 +32,8 @@ static ArtLeaf<T> *get_new_leaf_node(const char *k, uint32_t l, T v) {
   }
 
   if (p) {
-    memset(p, 0, sizeof(ArtLeaf<T>));
-    p->set_leaf_key_val(k, l, v);
     p->type = ArtNodeTrait<ArtLeaf<T>>::NODE_TYPE;
+    p->set_leaf_key_val(k, l, v);
   } else {
     p = new ArtLeaf<T>;
     p->set_from_new();

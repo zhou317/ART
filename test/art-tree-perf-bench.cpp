@@ -11,7 +11,7 @@
 
 namespace art {
 
-const uint64_t n = 10000 * 160;
+const uint64_t n = 10000 * 100 * 16;
 
 template <class T>
 static void insertSparseStl() {
@@ -54,6 +54,7 @@ static void insertSparseStl2() {
       std::string tmp{buf, sizeof(uint64_t)};
       mp[tmp] = i;
     }
+    std::cout << get_pool_usage<int64_t>() << std::endl;
   }
 }
 
@@ -63,10 +64,22 @@ TEST(ArtBench, insertSparse2) {
   {
     ArtTree<int64_t> tree;
     {
-      TIMER_START(t, "Insert %llu", n);
+      TIMER_START(t, "Insert int64, key count %llu", n);
       for (uint64_t i = 0; i < n; i++) {
         *reinterpret_cast<uint64_t *>(buf) = rng();
         tree.set(buf, sizeof(uint64_t), i);
+      }
+    }
+    std::cout << get_pool_usage<int64_t>() << std::endl;
+  }
+
+  {
+    ArtTree<int64_t> tree;
+    {
+      TIMER_START(t, "Insert int32, key count %llu", n);
+      for (uint64_t i = 0; i < n; i++) {
+        *reinterpret_cast<uint64_t *>(buf) = rng();
+        tree.set(buf, sizeof(uint32_t), i);
       }
     }
   }
