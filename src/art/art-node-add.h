@@ -150,7 +150,7 @@ static inline void art_add_child_to_node(ArtNodeCommon **node, uint8_t keyByte,
       art_add_child_to_n256(node, keyByte, child);
     } break;
     default:
-      assert(false);
+      LOG_ERROR("unknown node type");
   }
 }
 

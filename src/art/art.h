@@ -25,25 +25,11 @@ class ArtTree {
   }
 
   T get(const char* key, uint32_t len) const {
-    auto leafNode = findInt(root_, key, len, 0);
-    if (leafNode) {
-      return reinterpret_cast<const ArtLeaf<T>*>(leafNode)->value;
-    } else {
-      return T{};
-    }
+    return findInt(root_, key, len);
   }
 
   T del(const char* key, uint32_t len) {
     return deleteInt(nullptr, &root_, key, len, 0);
-  }
-
-  int32_t count(const char* key, uint32_t len) const {
-    auto leafNode = findInt(root_, key, len, 0);
-    if (leafNode) {
-      return 1;
-    } else {
-      return 0;
-    }
   }
 
   // for debug
@@ -72,13 +58,13 @@ class ArtTree {
       }
     }
 
-    auto [p, c1, c2] = detail::art_check_inner_prefix(nodePtr, key, len, depth);
-    if (p != nodePtr->keyLen) {
+    bool inner_match = detail::art_inner_prefix_match(nodePtr, key, len, depth);
+    if (!inner_match) {
       return T{};
     }
 
-    depth += p;
-    uint8_t child_key = key[depth];
+    depth += nodePtr->keyLen;
+    uint8_t child_key = depth < len ? key[depth] : 0;
     auto next = detail::art_find_child(nodePtr, child_key);
     if (next) {
       return deleteInt(node, next, key, len, depth + 1);
@@ -108,7 +94,7 @@ class ArtTree {
       auto newLeaf = detail::get_new_leaf_node<T>(key, len, value);
       auto [prefixLen, c1, c2] =
           detail::get_prefix_len_and_diff_char(nodePtr, newLeaf, depth);
-      newInner4->set_key(nodePtr->get_key_in_depth(depth), prefixLen);
+      newInner4->set_prefix_key(key + depth, prefixLen);
       newInner4->init_with_leaf(c1, leaf, c2, newLeaf);
 
       *node = newInner4;
@@ -116,13 +102,15 @@ class ArtTree {
       return T{};
     }
 
-    auto [p, c1, c2] = detail::art_check_inner_prefix(nodePtr, key, len, depth);
-    if (p != nodePtr->keyLen) {  // new leaf at this node
+    auto [p, c1, c2, new_prefix] =
+        detail::art_check_inner_prefix(nodePtr, key, len, depth);
+    if (p < nodePtr->keyLen) {  // new leaf at this node
       auto newInner4 = detail::get_new_art_node<ArtNode4>();
       auto newLeaf = detail::get_new_leaf_node<T>(key, len, value);
-      if (p) newInner4->set_key(key + depth, p);
+      newInner4->set_prefix_key(key + depth, p);
 
-      nodePtr->remove_prefix(p + 1);
+      nodePtr->reset_prefix(new_prefix, p + 1);
+
       newInner4->init_with_leaf(c1, nodePtr, c2, newLeaf);
       *node = newInner4;
       size_++;
@@ -142,31 +130,35 @@ class ArtTree {
     }
   }
 
-  const ArtNodeCommon* findInt(const ArtNodeCommon* node, const char* key,
-                               uint32_t len, uint32_t depth) const {
-    if (unlikely(node == nullptr)) {
-      return nullptr;
-    }
+  T findInt(ArtNodeCommon* root, const char* key, uint32_t len) const {
+    ArtNodeCommon** child;
+    ArtNodeCommon* cur = root;
+    uint32_t depth = 0;
 
-    if (node->type == ArtNodeType::ART_NODE_LEAF) {
-      auto leaf = reinterpret_cast<const ArtLeaf<T>*>(node);
-      if (leaf->leaf_matches(key, len, depth)) {
-        return node;
-      } else {
-        return nullptr;
+    while (cur) {
+      if (cur->type == ArtNodeType::ART_NODE_LEAF) {
+        auto leaf = reinterpret_cast<ArtLeaf<T>*>(cur);
+        if (leaf->leaf_matches(key, len, depth)) {
+          return reinterpret_cast<ArtLeaf<T>*>(cur)->value;
+        }
+        return T{};
       }
+
+      bool inner_match = detail::art_inner_prefix_match(cur, key, len, depth);
+      if (!inner_match) {
+        return T{};
+      } else {
+        depth += cur->keyLen;
+      }
+      // search child
+      uint8_t child_key = depth < len ? key[depth] : 0;
+      child =
+          detail::art_find_child(const_cast<ArtNodeCommon*>(cur), child_key);
+      cur = (child) ? *child : nullptr;
+      depth++;
     }
 
-    auto [p, c1, c2] = detail::art_check_inner_prefix(node, key, len, depth);
-    if (p != node->keyLen) {
-      return nullptr;
-    }
-
-    depth += p;
-    auto next =
-        detail::art_find_child(const_cast<ArtNodeCommon*>(node), key[depth]);
-    if (!next) return nullptr;
-    return findInt(*next, key, len, depth + 1);
+    return T{};
   }
 
  private:
