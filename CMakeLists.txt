@@ -10,3 +10,4 @@ include_directories(${PROJECT_SOURCE_DIR}/src)
 enable_testing()
 
 add_subdirectory(test)
+add_subdirectory(example)

@@ -11,6 +11,11 @@ namespace detail {
 
 static void art_node_to_string(std::string &out, const ArtNodeCommon *node,
                                uint32_t depth, uint8_t key, bool recusive) {
+  if (!node && depth == 0) {
+    out += "Empty";
+    return;
+  }
+
   if (depth > 0) {
     out += std::string(depth - 1, '-') + "key char:";
     if (std::isdigit(key) || std::isalpha(key)) {
@@ -72,19 +77,19 @@ static void art_node_to_string(std::string &out, const ArtNodeCommon *node,
 
 }  // namespace detail
 
-static std::string art_node_to_string(const ArtNodeCommon *node,
-                                      bool recursive = true) {
+static std::string art_node_to_string_unsafe(const ArtNodeCommon *node,
+                                             bool recursive = true) {
   std::string ret;
   detail::art_node_to_string(ret, node, 0, 0, recursive);
   return ret;
 }
 
 inline std::ostream &operator<<(std::ostream &os, const ArtNodeCommon *node) {
-  return os << art_node_to_string(node);
+  return os << art_node_to_string_unsafe(node);
 }
 
 inline std::ostream &operator<<(std::ostream &os, const ArtNodeCommon &node) {
-  return os << art_node_to_string(&node);
+  return os << art_node_to_string_unsafe(&node);
 }
 
 template <class T>
