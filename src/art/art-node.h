@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -29,13 +30,51 @@ union ArtNodeKey {
   char *keyPtr;
 };
 
+class ArtNode4;
+class ArtNode16;
+class ArtNode48;
+class ArtNode256;
+template <class T>
+class ArtLeaf;
+
 template <class T>
 struct ArtNodeTrait {
   static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_INVALID;
   static constexpr uint32_t NODE_CAPASITY = 0;
 };
 
-struct alignas(void *) ArtNodeCommon {
+template <>
+struct ArtNodeTrait<ArtNode4> {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_4;
+  static constexpr uint32_t NODE_CAPASITY = 4;
+};
+
+template <>
+struct ArtNodeTrait<ArtNode16> {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_16;
+  static constexpr uint32_t NODE_CAPASITY = 16;
+};
+
+template <>
+struct ArtNodeTrait<ArtNode48> {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_48;
+  static constexpr uint32_t NODE_CAPASITY = 48;
+};
+
+template <>
+struct ArtNodeTrait<ArtNode256> {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_256;
+  static constexpr uint32_t NODE_CAPASITY = 256;
+};
+
+template <class T>
+struct ArtNodeTrait<ArtLeaf<T>> {
+  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_LEAF;
+  static constexpr uint32_t NODE_CAPASITY = 0;
+};
+
+struct alignas(64) ArtNodeCommon {
+  std::atomic<uint64_t> version = {0};
   ArtNodeKey key = {.keyPtr = nullptr};
   uint32_t keyLen = 0;
   uint8_t flag = 0;
@@ -48,6 +87,7 @@ struct alignas(void *) ArtNodeCommon {
 
   void reset() {
     reset_key();
+    version = 0;
     flag = 0;
     type = ART_NODE_INVALID;
     childNum = 0;
@@ -125,6 +165,53 @@ struct alignas(void *) ArtNodeCommon {
     keyLen = l;
     if (l)
       std::memcpy(key.shortKey, k, std::min(l, (uint32_t)ART_MAX_PREFIX_LEN));
+  }
+
+  bool is_full() const {
+    uint32_t full_cnt = 0;
+    switch (type) {
+      case ArtNodeType::ART_NODE_4: {
+        full_cnt = ArtNodeTrait<ArtNode4>::NODE_CAPASITY;
+      } break;
+      case ArtNodeType::ART_NODE_16: {
+        full_cnt = ArtNodeTrait<ArtNode16>::NODE_CAPASITY;
+      } break;
+      case ArtNodeType::ART_NODE_48: {
+        full_cnt = ArtNodeTrait<ArtNode48>::NODE_CAPASITY;
+      } break;
+      case ArtNodeType::ART_NODE_256: {
+        full_cnt = ArtNodeTrait<ArtNode256>::NODE_CAPASITY;
+      } break;
+      default: {
+        LOG_ERROR("unknown node type");
+      }
+    }
+
+    return childNum == full_cnt;
+  }
+
+  bool need_adjust_after_delete() const {
+    uint32_t lower_bound_cnt = 0;
+    switch (type) {
+      case ArtNodeType::ART_NODE_4: {
+        lower_bound_cnt = 2;
+      } break;
+      case ArtNodeType::ART_NODE_16: {
+        lower_bound_cnt = 4;
+      } break;
+      case ArtNodeType::ART_NODE_48: {
+        lower_bound_cnt = 16;
+      } break;
+      case ArtNodeType::ART_NODE_256: {
+        lower_bound_cnt = 48;
+      } break;
+
+      default: {
+        LOG_ERROR("unknown node type");
+      }
+    }
+
+    return childNum <= lower_bound_cnt;
   }
 };
 
@@ -241,42 +328,6 @@ struct ArtLeaf : public ArtNodeCommon {
   T value;
 };
 
-static_assert(sizeof(ArtNode256) == 16 + 256 * 8, "Wrong memory layout");
-static_assert(sizeof(ArtNode48) == 16 + 256 + 48 * 8, "Wrong memory layout");
-static_assert(sizeof(ArtNode16) == 16 + 16 + 16 * 8, "Wrong memory layout");
-// node4 keys is 8-align
-static_assert(sizeof(ArtNode4) == 16 + 8 + 4 * 8, "Wrong memory layout");
-
-template <>
-struct ArtNodeTrait<ArtNode4> {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_4;
-  static constexpr uint32_t NODE_CAPASITY = 4;
-};
-
-template <>
-struct ArtNodeTrait<ArtNode16> {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_16;
-  static constexpr uint32_t NODE_CAPASITY = 16;
-};
-
-template <>
-struct ArtNodeTrait<ArtNode48> {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_48;
-  static constexpr uint32_t NODE_CAPASITY = 48;
-};
-
-template <>
-struct ArtNodeTrait<ArtNode256> {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_256;
-  static constexpr uint32_t NODE_CAPASITY = 256;
-};
-
-template <class T>
-struct ArtNodeTrait<ArtLeaf<T>> {
-  static constexpr ArtNodeType NODE_TYPE = ArtNodeType::ART_NODE_LEAF;
-  static constexpr uint32_t NODE_CAPASITY = 0;
-};
-
 static_assert(ArtNodeTrait<ArtNode4>::NODE_TYPE == ArtNodeType::ART_NODE_4,
               "should be equal");
 static_assert(ArtNodeTrait<ArtNode16>::NODE_TYPE == ArtNodeType::ART_NODE_16,
@@ -339,43 +390,6 @@ static PrefixDiffResult get_prefix_len_and_diff_char(const ArtNodeCommon *leaf1,
   return {idx, c1, c2};
 }
 
-static const ArtNodeCommon *art_get_minimum_node(const ArtNodeCommon *node) {
-  auto ret = node;
-
-  while (ret) {
-    if (ret->type == ArtNodeType::ART_NODE_LEAF) {
-      break;
-    }
-
-    switch (ret->type) {
-      case ArtNodeType::ART_NODE_4: {
-        ret = reinterpret_cast<const ArtNode4 *>(ret)->children[0];
-      } break;
-      case ArtNodeType::ART_NODE_16: {
-        ret = reinterpret_cast<const ArtNode16 *>(ret)->children[0];
-      } break;
-      case ArtNodeType::ART_NODE_48: {
-        int32_t idx = 0;
-        auto tmp = reinterpret_cast<const ArtNode48 *>(ret);
-        while (!tmp->index[idx]) idx++;
-        idx = tmp->index[idx] - 1;
-        ret = tmp->children[idx];
-      } break;
-      case ArtNodeType::ART_NODE_256: {
-        int32_t idx = 0;
-        auto tmp = reinterpret_cast<const ArtNode256 *>(ret);
-        while (!tmp->children[idx]) idx++;
-        ret = tmp->children[idx];
-      } break;
-      default: {
-        LOG_ERROR("unknown node type");
-      }
-    }
-  }
-
-  return ret;
-}
-
 static inline ArtNodeKey funGetNewPrefix(const char *ptr, uint32_t depth,
                                          uint32_t prefix_len,
                                          uint32_t prefix_diff) {
@@ -389,64 +403,6 @@ static inline ArtNodeKey funGetNewPrefix(const char *ptr, uint32_t depth,
 
   return ret;
 };
-
-struct InnerPrefixDiffResult {
-  int32_t prefix_len;
-  uint8_t c1;
-  uint8_t c2;
-  ArtNodeKey new_inner;
-};
-
-static InnerPrefixDiffResult art_check_inner_prefix(const ArtNodeCommon *node,
-                                                    const char *key,
-                                                    uint32_t len,
-                                                    uint32_t depth) {
-  assert(node->type != ArtNodeType::ART_NODE_LEAF);
-  int32_t ret = 0;
-  uint8_t c1 = 0;
-  uint8_t c2 = 0;
-  ArtNodeKey new_prefix = {.keyPtr = nullptr};
-
-  auto max_cmp = std::min(node->keyLen, len - depth);
-  if (node->keyLen <= ART_MAX_PREFIX_LEN) {
-    auto prefix = node->get_key();
-    for (; ret < max_cmp; ret++) {
-      if (prefix[ret] != key[depth + ret]) {
-        c1 = prefix[ret];
-        c2 = key[depth + ret];
-        new_prefix = funGetNewPrefix(prefix, (uint32_t)0, node->keyLen, ret);
-        return {ret, c1, c2, new_prefix};
-      }
-    }
-
-    if (len - depth < node->keyLen) {
-      c1 = prefix[ret];
-      new_prefix = funGetNewPrefix(prefix, (uint32_t)0, node->keyLen, ret);
-    }
-
-    return {ret, c1, c2, new_prefix};
-  } else {
-    // We need get a leaf for entire prefix.
-    // All child have same prefix, wo get leftmost.
-    auto l = art_get_minimum_node(node);
-
-    for (; ret < max_cmp; ret++) {
-      if (l->get_key()[depth + ret] != key[depth + ret]) {
-        c1 = l->get_key()[depth + ret];
-        c2 = key[depth + ret];
-        new_prefix = funGetNewPrefix(l->get_key(), depth, node->keyLen, ret);
-        return {ret, c1, c2, new_prefix};
-      }
-    }
-
-    if (len - depth < node->keyLen) {
-      c1 = l->get_key()[depth + ret];
-      new_prefix = funGetNewPrefix(l->get_key(), depth, node->keyLen, ret);
-    }
-
-    return {ret, c1, c2, new_prefix};
-  }
-}
 
 static bool art_inner_prefix_match(const ArtNodeCommon *node, const char *key,
                                    uint32_t len, uint32_t depth) {

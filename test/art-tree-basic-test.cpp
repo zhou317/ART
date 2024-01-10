@@ -33,7 +33,6 @@ class ArtTreeBasicTest : public ::testing::Test {
 
   int64_t get(const std::string &key) {
     return tree.get(key.data(), key.size());
-    ;
   }
 
   std::unordered_map<std::string, int64_t> verify_map;

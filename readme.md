@@ -2,13 +2,14 @@
 
 这个库提供了Adaptive Radix Tree(ART)的c++实现。
 
-相较于传统的基数树，ART通过前缀压缩减少竖向的节点数量，通过各种容量的节点(4, 16, 48, 256)减少节点占用大小，在空间上更优。
+相较于传统的基数树，ART通过前缀压缩减少竖向的节点数量，通过各种容量的节点(4, 16, 48, 256)减少节点空间占用大小，在空间上更优。
 
 我们的ART实现提供:
 
 - O(len(key))时间复杂度的get/set/del操作
-- 相较于[libart](https://github.com/armon/libart/tree/master), 本库ART的操作都用迭代而非递归实现
-- get/set/del操作都是线程安全的，并且通过乐观加锁，线程间充分地并发。 -- todo
+- 相较于[libart](https://github.com/armon/libart/tree/master), 本库ART的操作都用**迭代而非递归**实现
+- get/set/del操作**都是线程安全**的，并且通过乐观加锁，线程间充分地并发。 -- Todo: 添加测试
+- 充足的测试，**行覆盖率达到90%以上**
 
 ### 使用例子
 
@@ -43,3 +44,10 @@ type:Node4, prefix:a, ccnt:2
 ### 性能测试
 
 todo():
+
+
+### 引用
+
+[The Adaptive Radix Tree:ARTful Indexing for Main-Memory Databases](https://db.in.tum.de/~leis/papers/ART.pdf)
+
+[The ART of Practical Synchronization](https://db.in.tum.de/~leis/papers/artsync.pdf)
