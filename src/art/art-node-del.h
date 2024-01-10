@@ -145,9 +145,9 @@ static inline void art_delete_from_n256(ArtNodeCommon** node, uint8_t keyByte) {
 }
 
 static void art_delete_from_node(ArtNodeCommon** node, uint8_t key_byte) {
-  auto partNodePtr = *node;
-  assert(partNodePtr != nullptr);
-  switch (partNodePtr->type) {
+  auto node_p = *node;
+  assert(node_p != nullptr);
+  switch (node_p->type) {
     case ART_NODE_4: {
       art_delete_from_n4(node, key_byte);
     } break;
