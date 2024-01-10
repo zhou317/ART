@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -24,13 +25,9 @@ class ArtTree {
     return insertInt(&root_, key, len, value, 0);
   }
 
-  T get(const char* key, uint32_t len) const {
-    return findInt(root_, key, len);
-  }
+  T get(const char* key, uint32_t len) const { return findInt(key, len); }
 
-  T del(const char* key, uint32_t len) {
-    return deleteInt(nullptr, &root_, key, len, 0);
-  }
+  T del(const char* key, uint32_t len) { return deleteInt(key, len); }
 
   // for debug
   ArtNodeCommon* getRoot() { return root_; }
@@ -38,39 +35,43 @@ class ArtTree {
   uint64_t size() const { return size_; }
 
  private:
-  T deleteInt(ArtNodeCommon** parNode, ArtNodeCommon** node, const char* key,
-              uint32_t len, uint32_t depth) {
-    if (unlikely(*node == nullptr)) {  // empty root
-      return T{};
-    }
+  T deleteInt(const char* key, uint32_t len) {
+    ArtNodeCommon** parent_pp = nullptr;
+    ArtNodeCommon** current_pp = &root_;
+    uint32_t depth = 0;
 
-    auto nodePtr = *node;
-    if (nodePtr->type == ArtNodeType::ART_NODE_LEAF) {
-      auto leaf = reinterpret_cast<ArtLeaf<T>*>(nodePtr);
-      if (leaf->leaf_matches(key, len, depth)) {
-        T v = leaf->value;
-        detail::art_delete_from_node(parNode, node, key, len, depth);
-        size_--;
-        detail::return_art_node(leaf);
-        return v;
-      } else {
+    if (root_ == nullptr) return T{};
+
+    while (current_pp) {
+      auto current_p = *current_pp;
+      if (current_p->type == ArtNodeType::ART_NODE_LEAF) {
+        auto leaf = reinterpret_cast<ArtLeaf<T>*>(current_p);
+        if (leaf->leaf_matches(key, len, depth)) {
+          T v = leaf->value;
+          detail::art_delete_from_node(parent_pp, current_pp, key, len, depth);
+          size_--;
+          detail::return_art_node(leaf);
+          return v;
+        } else {
+          return T{};
+        }
+      }
+
+      bool inner_match =
+          detail::art_inner_prefix_match(current_p, key, len, depth);
+      if (!inner_match) {
         return T{};
       }
+
+      depth += current_p->keyLen;
+      uint8_t child_key = depth < len ? key[depth] : 0;
+      auto next = detail::art_find_child(current_p, child_key);
+      depth++;
+      parent_pp = current_pp;
+      current_pp = next;
     }
 
-    bool inner_match = detail::art_inner_prefix_match(nodePtr, key, len, depth);
-    if (!inner_match) {
-      return T{};
-    }
-
-    depth += nodePtr->keyLen;
-    uint8_t child_key = depth < len ? key[depth] : 0;
-    auto next = detail::art_find_child(nodePtr, child_key);
-    if (next) {
-      return deleteInt(node, next, key, len, depth + 1);
-    } else {
-      return T{};
-    }
+    return T{};
   }
 
   T insertInt(ArtNodeCommon** node, const char* key, uint32_t len, T value,
@@ -130,9 +131,9 @@ class ArtTree {
     }
   }
 
-  T findInt(ArtNodeCommon* root, const char* key, uint32_t len) const {
+  T findInt(const char* key, uint32_t len) const {
     ArtNodeCommon** child;
-    ArtNodeCommon* cur = root;
+    ArtNodeCommon* cur = root_;
     uint32_t depth = 0;
 
     while (cur) {
@@ -163,7 +164,7 @@ class ArtTree {
 
  private:
   ArtNodeCommon* root_ = nullptr;
-  uint64_t size_ = 0;
+  std::atomic<uint64_t> size_ = 0;
 };
 
 }  // namespace art

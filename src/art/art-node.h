@@ -230,11 +230,11 @@ struct ArtLeaf : public ArtNodeCommon {
 
   bool leaf_matches(const char *k, uint32_t l, uint32_t d) const {
     if (keyLen != l) return false;
-    if (d >= l) return true;  // when str2 = str1 + xxx
     auto leaf_key = get_key();
-    if (leaf_key[d] != k[d]) return false;
 
+    if (d < l && leaf_key[d] != k[d]) return false;
     bool ret = std::memcmp(leaf_key, k, l) == 0;
+
     return ret;
   }
 
