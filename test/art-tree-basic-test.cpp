@@ -29,7 +29,6 @@ class ArtTreeBasicTest : public ::testing::Test {
 
   int64_t del_not_exist_key(const std::string &key) {
     return tree.del(key.data(), key.size());
-    ;
   }
 
   int64_t get(const std::string &key) {
@@ -42,10 +41,10 @@ class ArtTreeBasicTest : public ::testing::Test {
 };
 
 TEST_F(ArtTreeBasicTest, basic) {
-  for (int32_t i = 0; i < 100; i++) {
+  for (int32_t i = 0; i < 10000; i++) {
     set(std::to_string(i), i);
   }
-  for (int32_t i = 0; i < 100; i += 2) {
+  for (int32_t i = 0; i < 10000; i += 2) {
     del(std::to_string(i));
   }
 }
@@ -69,6 +68,15 @@ TEST_F(ArtTreeBasicTest, find_and_delete_not_exist) {
   std::cout << tree.getRoot() << "\n";
   del("abc");
   del("adc");
+}
+
+TEST_F(ArtTreeBasicTest, delete_a_prefix) {
+  set("abcd", 1);
+  set("accd", 2);
+  set("acddfgh", 3);
+  set("acddfghij", 4);
+
+  del("acddfgh");
 }
 
 }  // namespace art
