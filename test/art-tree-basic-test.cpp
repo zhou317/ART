@@ -65,7 +65,7 @@ TEST_F(ArtTreeBasicTest, find_and_delete_not_exist) {
   EXPECT_EQ(get("acc"), 0);
   EXPECT_EQ(del_not_exist_key("acc"), 0);
 
-  std::cout << tree.getRoot() << "\n";
+  std::cout << tree.get_root_unsafe() << "\n";
   del("abc");
   del("adc");
 }

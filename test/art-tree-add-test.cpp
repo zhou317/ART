@@ -51,12 +51,12 @@ TEST_F(ArtTreeAddTest, diff_with_inner) {
   set("ddaaaaac", 1);
   set("ddbddb", 2);
   set("ddaaaabcd", 3);
-  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+  LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 
   set("ddaaeabcd", 4);
-  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+  LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 
-  auto node = tree.getRoot();
+  auto node = tree.get_root_unsafe();
   EXPECT_EQ(node->type, ArtNodeType::ART_NODE_4);
   auto node4 = reinterpret_cast<ArtNode4*>(node);
   EXPECT_EQ(node4->keys[0], 'a');
@@ -82,12 +82,12 @@ TEST_F(ArtTreeAddTest, diff_with_leaf) {
   set("ddaaaaac", 1);
   set("ddbddb", 2);
   set("ddaaaabcd", 3);
-  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+  LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 
   set("ddbdee", 4);
-  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+  LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 
-  auto node = tree.getRoot();
+  auto node = tree.get_root_unsafe();
   EXPECT_EQ(node->type, ArtNodeType::ART_NODE_4);
   auto node4 = reinterpret_cast<ArtNode4*>(node);
   EXPECT_EQ(node4->keys[1], 'b');
@@ -114,12 +114,12 @@ TEST_F(ArtTreeAddTest, diff_with_none) {
   set("ddaaaaac", 1);
   set("ddbddb", 2);
   set("ddaaaabcd", 3);
-  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+  LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 
   set("ddaaaagxxx", 4);
-  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+  LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 
-  auto node = tree.getRoot();
+  auto node = tree.get_root_unsafe();
   EXPECT_EQ(node->type, ArtNodeType::ART_NODE_4);
   auto node4 = reinterpret_cast<ArtNode4*>(node);
   EXPECT_EQ(node4->keys[0], 'a');
@@ -147,14 +147,14 @@ TEST_F(ArtTreeAddTest, key_short_than_prefix0) {
   set("abcdef1", 1);
   set("abcdef2", 2);
   set("abc", 3);
-  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+  LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 }
 
 TEST_F(ArtTreeAddTest, key_short_than_prefix1) {
   set("abcdefghijklmnopqrstuvwxyz1", 1);
   set("abcdefghijklmnopqrstuvwxyz2", 2);
   set("abc", 3);
-  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+  LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 }
 
 TEST_F(ArtTreeAddTest, populate_node4_with_leaf0) {
@@ -162,7 +162,7 @@ TEST_F(ArtTreeAddTest, populate_node4_with_leaf0) {
   set("accd", 2);
   set("acddfgh", 3);
   set("acddf", 4);
-  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+  LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 }
 
 TEST_F(ArtTreeAddTest, populate_node4_with_leaf1) {
@@ -170,7 +170,7 @@ TEST_F(ArtTreeAddTest, populate_node4_with_leaf1) {
   set("accd", 2);
   set("acddfgh", 3);
   set("acddfghij", 4);
-  LOG_INFO("\n%s", art_node_to_string(tree.getRoot()).c_str());
+  LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 }
 
 TEST_F(ArtTreeAddTest, get_minimum_node) {
@@ -182,7 +182,7 @@ TEST_F(ArtTreeAddTest, get_minimum_node) {
     set(base, i + 1);
     base.pop_back();
 
-    auto l = detail::art_get_minimum_node(tree.getRoot());
+    auto l = detail::art_get_minimum_node(tree.get_root_unsafe());
     auto key = l->to_string();
 
     EXPECT_EQ("a\1", key);

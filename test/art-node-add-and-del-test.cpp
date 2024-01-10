@@ -96,7 +96,8 @@ void test_fun() {
     child_map[v[i]] = new_leaf;
   }
 
-  LOG_INFO("===== node full ====\n%s", art_node_to_string(common_n).c_str());
+  LOG_INFO("===== node full ====\n%s",
+           art_node_to_string_unsafe(common_n).c_str());
   verify_node<BeforeT>(common_n, child_map);
   if (i < v.size()) {
     std::string key = "test" + std::to_string(i);
@@ -104,7 +105,7 @@ void test_fun() {
     art_add_child_to_node(&common_n, v[i], new_leaf);
     child_map[v[i]] = new_leaf;
     LOG_INFO("===== node overflow ====\n%s",
-             art_node_to_string(common_n).c_str());
+             art_node_to_string_unsafe(common_n).c_str());
     verify_node<OverFlowT>(common_n, child_map);
   }
 
