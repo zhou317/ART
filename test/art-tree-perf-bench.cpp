@@ -11,7 +11,7 @@
 
 namespace art {
 
-const uint64_t n = 10000 * 1 * 16;
+const uint64_t n = 10000 * 100 * 16;
 
 template <class T>
 static void insertSparseStl() {
@@ -38,8 +38,8 @@ TEST(ArtBench, insertSparse) {
       }
     }
   }
-  insertSparseStl<std::map<std::string, int64_t>>();
-  insertSparseStl<std::unordered_map<std::string, int64_t>>();
+  //  insertSparseStl<std::map<std::string, int64_t>>();
+  //  insertSparseStl<std::unordered_map<std::string, int64_t>>();
 }
 
 template <class T>
@@ -83,8 +83,8 @@ TEST(ArtBench, insertSparse2) {
       }
     }
   }
-  insertSparseStl2<std::map<std::string, int64_t>>();
-  insertSparseStl2<std::unordered_map<std::string, int64_t>>();
+  //  insertSparseStl2<std::map<std::string, int64_t>>();
+  //  insertSparseStl2<std::unordered_map<std::string, int64_t>>();
 }
 
 }  // namespace art
