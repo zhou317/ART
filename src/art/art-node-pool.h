@@ -45,6 +45,8 @@ static ArtLeaf<T> *get_new_leaf_node(const char *k, uint32_t l, T v) {
 
 template <class T>
 static void return_art_node(T *ptr) {
+  // todo(zzh). epoch based node memory reclaim
+  return;
   assert(ptr);
   if (ptr->is_from_new()) {
     delete ptr;

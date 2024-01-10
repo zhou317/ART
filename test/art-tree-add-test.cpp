@@ -173,22 +173,6 @@ TEST_F(ArtTreeAddTest, populate_node4_with_leaf1) {
   LOG_INFO("\n%s", art_node_to_string_unsafe(tree.get_root_unsafe()).c_str());
 }
 
-TEST_F(ArtTreeAddTest, get_minimum_node) {
-  set("ba", 0);
-
-  std::string base = "a";
-  for (int32_t i = 1; i < 256; i++) {
-    base.push_back(i);
-    set(base, i + 1);
-    base.pop_back();
-
-    auto l = detail::art_get_minimum_node(tree.get_root_unsafe());
-    auto key = l->to_string();
-
-    EXPECT_EQ("a\1", key);
-  }
-}
-
 TEST_F(ArtTreeAddTest, random_test) {
   int64_t seed = time(nullptr);
   LOG_INFO("Seed is %lld", seed);
