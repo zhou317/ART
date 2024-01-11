@@ -11,7 +11,7 @@
 
 namespace art {
 
-const uint64_t n = 10000 * 100 * 16;
+const uint64_t n = 10000 * 1 * 16;
 
 template <class T>
 static void insertSparseStl() {

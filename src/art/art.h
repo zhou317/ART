@@ -7,6 +7,7 @@
 #include "art/art-node-add.h"
 #include "art/art-node-del.h"
 #include "art/art-printer.h"
+#include "art/art-sync-macros.h"
 
 namespace art {
 
@@ -39,58 +40,6 @@ class ArtTree {
   ArtNodeCommon* get_root_unsafe() const { return meta_to_root_.children[0]; }
 
   uint64_t size() const { return size_; }
-
- private:
-#define ART_SET_LOCK_BIT(v) ((v) + 2)
-#define ART_IS_OBSOLETE(v) ((v)&1)
-#define ART_IS_LOCKED(v) ((v)&2)
-
-  static uint64_t _art_spin_on_locked_node(const ArtNodeCommon* node) {
-    uint64_t version = node->version.load();
-    while (ART_IS_LOCKED(version)) {
-      __builtin_ia32_pause();
-      version = node->version.load();
-    }
-    return version;
-  }
-
-#define ART_MACRO_READ_LOCK_OR_RESTART(node, version_varname, restart_label) \
-  version_varname = _art_spin_on_locked_node(node);                          \
-  if (ART_IS_OBSOLETE(version_varname)) goto restart_label
-
-#define ART_MACRO_READ_UNLOCK_OR_RESTART(node, version_varname, restart_label) \
-  if ((version_varname) != (node)->version.load()) goto restart_label
-
-#define ART_MACRO_UPGRADE_TO_WRITE_OR_RESTART(node, version_varname, \
-                                              restart_label)         \
-  if (!(node)->version.compare_exchange_strong(                      \
-          version_varname, ART_SET_LOCK_BIT(version_varname)))       \
-  goto restart_label
-
-#define ART_MACRO_WRITE_UNLOCK(node) (node)->version.fetch_add(2)
-
-#define ART_MACRO_WRITE_UNLOCK_OBSOLETE(node) (node)->version.fetch_add(3)
-
-#define ART_MACRO_UPGRADE_TO_WRITE_OR_RESTART_AND_RELEASE(         \
-    node, version_varname, lockNode, restart_label)                \
-  do {                                                             \
-    if (!(node)->version.compare_exchange_strong(                  \
-            version_varname, ART_SET_LOCK_BIT(version_varname))) { \
-      ART_MACRO_WRITE_UNLOCK(lockNode);                            \
-      goto restart_label;                                          \
-    }                                                              \
-  } while (0)
-
-#define ART_MACRO_UPGRADE_TO_WRITE_OR_RESTART_AND_RELEASE_TWO(     \
-    node, version_varname, lockNode_p, lockNode_pp, restart_label) \
-  do {                                                             \
-    if (!(node)->version.compare_exchange_strong(                  \
-            version_varname, ART_SET_LOCK_BIT(version_varname))) { \
-      ART_MACRO_WRITE_UNLOCK(lockNode_p);                          \
-      ART_MACRO_WRITE_UNLOCK(lockNode_pp);                         \
-      goto restart_label;                                          \
-    }                                                              \
-  } while (0)
 
  private:
   T deleteInt(const char* key, uint32_t len) {
@@ -143,7 +92,7 @@ class ArtTree {
         *current_pp = nullptr;
 
         ART_MACRO_WRITE_UNLOCK(parent_p);
-        ART_MACRO_WRITE_UNLOCK(current_p);
+        ART_MACRO_WRITE_UNLOCK_OBSOLETE(current_p);
 
         return v;
       }
@@ -174,8 +123,8 @@ class ArtTree {
             detail::art_delete_from_node(parent_pp, key[depth - 1]);
 
             ART_MACRO_WRITE_UNLOCK(parent_parent_p);
-            ART_MACRO_WRITE_UNLOCK(parent_p);
-            ART_MACRO_WRITE_UNLOCK(current_p);
+            ART_MACRO_WRITE_UNLOCK_OBSOLETE(parent_p);
+            ART_MACRO_WRITE_UNLOCK_OBSOLETE(current_p);
           } else {
             ART_MACRO_UPGRADE_TO_WRITE_OR_RESTART(parent_p, version_parent,
                                                   label_delete_retry);
@@ -185,7 +134,7 @@ class ArtTree {
             detail::art_delete_from_node(parent_pp, key[depth - 1]);
 
             ART_MACRO_WRITE_UNLOCK(parent_p);
-            ART_MACRO_WRITE_UNLOCK(current_p);
+            ART_MACRO_WRITE_UNLOCK_OBSOLETE(current_p);
           }
           size_--;
           detail::return_art_node(leaf);
@@ -400,7 +349,7 @@ class ArtTree {
           detail::art_add_child_to_node(current_pp, child_key, newLeaf);
 
           ART_MACRO_WRITE_UNLOCK(parent_p);
-          ART_MACRO_WRITE_UNLOCK(current_p);
+          ART_MACRO_WRITE_UNLOCK_OBSOLETE(current_p);
         } else {
           ART_MACRO_UPGRADE_TO_WRITE_OR_RESTART_AND_RELEASE(
               current_p, version_current, parent_p, label_insert_retry);

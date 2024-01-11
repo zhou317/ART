@@ -7,6 +7,11 @@
 #include <cstring>
 #include <string>
 
+#ifndef ART_MACRO_OPTIMISTIC_LOCK
+#include "common/rwlatch.h"
+#endif
+
+#include "art/art-sync-macros.h"
 #include "common/logger.h"
 #include "common/macros.h"
 
@@ -74,7 +79,11 @@ struct ArtNodeTrait<ArtLeaf<T>> {
 };
 
 struct alignas(64) ArtNodeCommon {
+#ifndef ART_MACRO_OPTIMISTIC_LOCK
+  ReaderWriterLatch rw_mutex;
+#else
   std::atomic<uint64_t> version = {0};
+#endif
   ArtNodeKey key = {.keyPtr = nullptr};
   uint32_t keyLen = 0;
   uint8_t flag = 0;
@@ -87,7 +96,10 @@ struct alignas(64) ArtNodeCommon {
 
   void reset() {
     reset_key();
+#ifndef ART_MACRO_OPTIMISTIC_LOCK
+#else
     version = 0;
+#endif
     flag = 0;
     type = ART_NODE_INVALID;
     childNum = 0;
